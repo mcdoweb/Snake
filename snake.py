@@ -123,34 +123,6 @@ def save_scores(score, date_time):
         writer = csv.writer(file)
         writer.writerows(top_scores)
 
-# Get the best score and most recent score from the CSV file
-def get_scores():
-    # Read the existing scores
-    scores = []
-    try:
-        with open(SCORES_FILE, mode='r', newline='') as file:
-            reader = csv.reader(file)
-            for row in reader:
-                scores.append((int(row[0]), row[1]))  # (score, datetime)
-    except FileNotFoundError:
-        return 0, 0  # If file doesn't exist, return 0 for both
-
-    if scores:
-        # Sort by score, and keep only the top 100, replacing older ones in case of a tie
-        scores = sorted(scores, key=lambda x: (-x[0], x[1]))  # Sort by score descending, and by datetime ascending
-        unique_scores = {}
-        for s, dt in scores:
-            unique_scores[s] = dt  # Keeps only the most recent datetime for each score
-
-        # Keep only top 100 scores
-        top_scores = sorted(unique_scores.items(), key=lambda x: (-x[0], x[1]))[:100]
-        
-        best_score = top_scores[0][0] if top_scores else 0
-        most_recent_score = top_scores[-1][0] if top_scores else 0
-        
-        return best_score, most_recent_score
-    return 0, 0
-
 # Main function
 def main():
     clock = pygame.time.Clock()
@@ -213,19 +185,6 @@ def main():
 
         pygame.display.update()
         clock.tick(10)
-    
-    # Display best and most recent score
-    best_score, most_recent_score = get_scores()
-    screen.fill((0, 0, 0))  # Clear the screen
-    if best_score is not None:
-        best_score_text = font.render(f"Best Score: {best_score}", True, WHITE)
-        screen.blit(best_score_text, (WIDTH // 2 - 100, HEIGHT // 2 - 50))
-    if most_recent_score is not None:
-        recent_score_text = font.render(f"Most Recent Score: {most_recent_score}", True, WHITE)
-        screen.blit(recent_score_text, (WIDTH // 2 - 150, HEIGHT // 2))
-
-    pygame.display.update()
-    pygame.time.wait(5000)  # Display the scores for 5 seconds
 
     pygame.quit()
 
