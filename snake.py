@@ -1,9 +1,11 @@
 import pygame
 import random
+import csv
+from datetime import datetime
 
 pygame.init()
 
-# Set up display
+# Set up display (original size)
 WIDTH, HEIGHT = 600, 400
 GRID_SIZE = 20
 GRID_WIDTH, GRID_HEIGHT = WIDTH // GRID_SIZE, HEIGHT // GRID_SIZE
@@ -12,8 +14,9 @@ pygame.display.set_caption("Snake Game")
 
 # Load background image
 background_image = pygame.image.load("jain.jpg").convert()
+background_image = pygame.transform.scale(background_image, (WIDTH, HEIGHT))
 
-# Load snake head and food images
+# Load snake head and food images and scale them to original size
 snake_head_image = pygame.image.load("tom.jpg")
 snake_head_image = pygame.transform.scale(snake_head_image, (GRID_SIZE, GRID_SIZE))
 
@@ -29,6 +32,9 @@ SKIN = (255, 224, 189)
 # Font
 font = pygame.font.Font(None, 36)
 
+# File for storing scores
+SCORES_FILE = "snake_scores.csv"
+
 # Snake class
 class Snake:
     def __init__(self):
@@ -39,7 +45,7 @@ class Snake:
         self.grow_pending = False
 
     def move(self):
-        if self.direction is not None:  # Only move if direction is set
+        if self.direction is not None:
             x, y = self.body[0]
             if self.direction == 'UP':
                 y -= 1
@@ -52,9 +58,9 @@ class Snake:
             self.body.insert(0, (x, y))
 
             if not self.grow_pending:
-                self.body.pop()  # Remove last segment if not growing
+                self.body.pop()
             else:
-                self.grow_pending = False  # Reset growth flag after growing
+                self.grow_pending = False
 
     def grow(self):
         self.grow_pending = True
@@ -62,7 +68,6 @@ class Snake:
     def draw(self):
         for i, segment in enumerate(self.body):
             if i == 0:
-                # Rotate snake head image based on direction
                 if self.direction == 'UP':
                     rotated_head = pygame.transform.rotate(snake_head_image, 0)
                 elif self.direction == 'DOWN':
@@ -71,9 +76,9 @@ class Snake:
                     rotated_head = pygame.transform.rotate(snake_head_image, 90)
                 elif self.direction == 'RIGHT':
                     rotated_head = pygame.transform.rotate(snake_head_image, -90)
-                screen.blit(rotated_head, (segment[0]*GRID_SIZE, segment[1]*GRID_SIZE))
+                screen.blit(rotated_head, (segment[0] * GRID_SIZE, segment[1] * GRID_SIZE))
             else:
-                pygame.draw.rect(screen, SKIN, (segment[0]*GRID_SIZE, segment[1]*GRID_SIZE, GRID_SIZE, GRID_SIZE))
+                pygame.draw.rect(screen, SKIN, (segment[0] * GRID_SIZE, segment[1] * GRID_SIZE, GRID_SIZE, GRID_SIZE))
 
 # Food class
 class Food:
@@ -82,12 +87,41 @@ class Food:
 
     def generate_position(self, snake):
         position = (random.randint(0, GRID_WIDTH-1), random.randint(0, GRID_HEIGHT-1))
-        while position in snake.body:  # Ensure food is not on the snake
+        while position in snake.body:
             position = (random.randint(0, GRID_WIDTH-1), random.randint(0, GRID_HEIGHT-1))
         return position
 
     def draw(self):
-        screen.blit(food_image, (self.position[0]*GRID_SIZE, self.position[1]*GRID_SIZE))
+        screen.blit(food_image, (self.position[0] * GRID_SIZE, self.position[1] * GRID_SIZE))
+
+# Save the scores to a CSV file
+def save_scores(score, date_time):
+    # Read the existing scores
+    scores = []
+    try:
+        with open(SCORES_FILE, mode='r', newline='') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                scores.append((int(row[0]), row[1]))  # (score, datetime)
+    except FileNotFoundError:
+        pass  # If file doesn't exist, start fresh
+
+    # Append the new score
+    scores.append((score, date_time))
+
+    # Sort by score, and keep only the top 100, replacing older ones in case of a tie
+    scores = sorted(scores, key=lambda x: (-x[0], x[1]))  # Sort by score descending, and by datetime ascending
+    unique_scores = {}
+    for s, dt in scores:
+        unique_scores[s] = dt  # Keeps only the most recent datetime for each score
+
+    # Keep only top 100 scores
+    top_scores = sorted(unique_scores.items(), key=lambda x: (-x[0], x[1]))[:100]
+
+    # Write the top 100 scores back to the file
+    with open(SCORES_FILE, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(top_scores)
 
 # Main function
 def main():
@@ -95,7 +129,7 @@ def main():
     snake = Snake()
     food = Food(snake)
     running = True
-    game_started = False  # Flag to track whether the game has started
+    game_started = False
     score = 0
 
     while running:
@@ -103,7 +137,7 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if not game_started:  # Start the game only after first input
+                if not game_started:
                     if event.key == pygame.K_UP:
                         snake.direction = 'UP'
                         game_started = True
@@ -125,30 +159,27 @@ def main():
                 elif event.key == pygame.K_RIGHT and snake.direction != 'LEFT':
                     snake.direction = 'RIGHT'
 
-        # Move the snake only if the game has started
         if game_started:
-            # Check if snake eats food
             if snake.body[0] == food.position:
                 snake.grow()
                 score += 1
                 food = Food(snake)
                 eat_sound.play()
 
-            # Snake movement
             snake.move()
 
-            # Check for collision with walls or self
             if (snake.body[0][0] < 0 or snake.body[0][0] >= GRID_WIDTH or
                 snake.body[0][1] < 0 or snake.body[0][1] >= GRID_HEIGHT or
                 snake.body[0] in snake.body[1:]):
+                # Save the score when the game ends
+                date_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                save_scores(score, date_time)
                 running = False
 
-            # Draw everything
             screen.blit(background_image, (0, 0))
             snake.draw()
             food.draw()
 
-            # Draw the score
             score_text = font.render(f"Score: {score}", True, WHITE)
             screen.blit(score_text, (10, 10))
 
